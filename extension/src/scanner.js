@@ -96,10 +96,14 @@ export async function runSearch({ filters, keywords, client, control, log, onPro
         continue;
       }
 
-      const sponsored = parsed.filter((item) => item.sponsored).length;
-      const queue = parsed;
+      const sponsored = parsed.filter((item) => item.sponsored);
+      const queue = parsed.filter((item) => item.asin && !item.sponsored);
       const place = catalog.section ? `${catalog.section} page ${page}` : `page ${page}`;
-      log("info", `"${keyword}" ${place}: ${parsed.length} results, ${sponsored} sponsored.`);
+      log("info", `"${keyword}" ${place}: ${queue.length} results, ${sponsored.length} sponsored skipped.`);
+      if (queue.length === 0) {
+        log("info", `"${keyword}" ${place} has no products. Later pages are skipped.`);
+        break;
+      }
 
       let cursor = 0;
       let stopError = null;

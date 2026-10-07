@@ -207,18 +207,18 @@ test("finder searches seller-shipped products, pauses, and exports a linked work
   assert.equal(productUrls.filter((url) => url.includes("B0FBM00002")).length, 0, productUrls.join("\n"));
   assert.equal(productUrls.length, duringPause);
   await page.click("#resume");
-  await page.waitForFunction(() => document.querySelectorAll("tbody tr").length >= 3, { timeout: 10000 });
+  await page.waitForFunction(() => document.querySelectorAll("tbody tr").length >= 2, { timeout: 10000 });
 
   const text = await page.$eval("#results", (element) => element.innerText);
   assert.match(text, /Seller ships it · Tayfus/);
   assert.match(text, /Seller ships it · OtherShop/);
   assert.doesNotMatch(text, /Amazon ships it/);
-  assert.match(text, /Sponsored shelf ad/);
-  assert.match(text, /3 found from 5 products checked/);
+  assert.doesNotMatch(text, /Sponsored shelf ad/);
+  assert.match(text, /2 found from 4 products checked/);
   assert.match(text, /Reviews far from target/);
   assert.match(text, /Price re-checked on product page/);
   const firstHref = await page.$eval("tbody tr a", (element) => element.href);
-  assert.equal(firstHref, "https://www.amazon.com/dp/B0SPONSOR1");
+  assert.equal(firstHref, "https://www.amazon.com/dp/B0FBM00001");
 
   const downloadDir = mkdtempSync(path.join(tmpdir(), "nichenet-xlsx-"));
   const client = await page.createCDPSession();

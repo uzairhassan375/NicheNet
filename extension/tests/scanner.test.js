@@ -61,7 +61,7 @@ test("progress line matches the live status sentence", () => {
   );
 });
 
-test("scanner keeps seller-shipped matches, including sponsored ones, and drops FBA and duplicate variants", async () => {
+test("scanner keeps seller-shipped matches, skips sponsored cards, and drops FBA and duplicate variants", async () => {
   const urls = [];
   const control = createJobControl();
   control.start();
@@ -81,15 +81,40 @@ test("scanner keeps seller-shipped matches, including sponsored ones, and drops 
   assert.equal(group.status, "done");
   assert.deepEqual(
     group.matches.map((match) => match.asin),
-    ["B0SPONSOR1", "B0FBM00001", "B0FBM00002"],
+    ["B0FBM00001", "B0FBM00002"],
   );
   assert.equal(group.matches[0].sellerColumn, "Seller ships it · Tayfus");
-  assert.equal(group.matches[2].sellerColumn, "Seller ships it · OtherShop");
-  assert.ok(group.matches[2].notes.includes("Reviews far from target"));
-  assert.ok(group.matches[2].notes.includes("Price re-checked on product page"));
+  assert.equal(group.matches[1].sellerColumn, "Seller ships it · OtherShop");
+  assert.ok(group.matches[1].notes.includes("Reviews far from target"));
+  assert.ok(group.matches[1].notes.includes("Price re-checked on product page"));
   assert.equal(group.matches[0].notes.length, 0);
-  assert.equal(`${group.matches.length} found from ${group.checked} products checked`, "3 found from 6 products checked");
-  assert.equal(urls.some((url) => url.includes("B0SPONSOR1")), true);
+  assert.equal(`${group.matches.length} found from ${group.checked} products checked`, "2 found from 5 products checked");
+  assert.equal(urls.some((url) => url.includes("B0SPONSOR1")), false);
+});
+
+test("an empty search page stops later pages", async () => {
+  const urls = [];
+  const control = createJobControl();
+  control.start();
+  await runSearch({
+    filters: filters({ resultsWanted: 10, maxPages: 5, handmade: false }),
+    keywords: ["wooden serving tray"],
+    client: {
+      setProbeUrl() {},
+      async fetchHtml(url) {
+        urls.push(url);
+        const page = new URL(url).searchParams.get("page");
+        const html = page === "1" ? searchResultsPage(SAMPLE_SEARCH) : searchResultsPage([]);
+        return { status: 200, url, html, doc: parseHtml(html), headers: { get() { return ""; } } };
+      },
+    },
+    control,
+    log() {},
+    onProgress() {},
+    onGroup() {},
+  });
+  assert.equal(urls.filter((url) => new URL(url).searchParams.get("page") === "3").length, 0);
+  assert.equal(urls.some((url) => new URL(url).searchParams.get("page") === "2"), true);
 });
 
 test("stop keeps the matches already found", async () => {

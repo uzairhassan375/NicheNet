@@ -229,6 +229,7 @@ export default function App() {
             <button type="submit">Sign in</button>
           </div>
         </form>
+        <p className="policy-link"><a href="/privacy">Privacy policy</a></p>
       </main>
     );
   }

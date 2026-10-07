@@ -1,0 +1,22 @@
+{
+  "name": "nichenet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Find products on Amazon that match your price, rating, review and seller filters, and export them to Excel.",
+  "type": "module",
+  "scripts": {
+    "prepare": "node scripts/vendor.js && node scripts/make-icons.js",
+    "postinstall": "node scripts/vendor.js && node scripts/make-icons.js",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "node --test tests/e2e/*.test.js",
+    "zip": "node scripts/zip-extension.js"
+  },
+  "dependencies": {
+    "jszip": "3.10.1",
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "jsdom": "25.0.1",
+    "puppeteer-core": "24.15.0"
+  }
+}

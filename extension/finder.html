@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NicheNet</title>
+    <link rel="stylesheet" href="src/finder.css" />
+    <link rel="icon" href="icons/icon32.png" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <img src="icons/icon48.png" width="52" height="52" alt="" />
+        <div>
+          <h1>NicheNet</h1>
+          <p>Find products on Amazon that match your price, rating, review and seller filters, and export them to Excel.</p>
+        </div>
+      </header>
+
+      <form id="account-form" class="card">
+        <h2>Sign in</h2>
+        <p class="hint">An admin creates your account and sets how many searches you can run each day. When that limit is reached, searching stays closed until the admin allows it again.</p>
+        <div class="grid">
+          <label class="span-2">
+            Email
+            <input id="account-email" type="email" autocomplete="username" required />
+          </label>
+          <label class="span-2">
+            Password
+            <input id="account-password" type="password" autocomplete="current-password" required />
+          </label>
+        </div>
+        <p id="account-error" class="errors" hidden></p>
+        <div class="actions">
+          <button id="account-login" type="submit">Sign in</button>
+        </div>
+      </form>
+
+      <div id="app-main" hidden>
+      <div class="account-bar">
+        <p id="account-status" class="notice"></p>
+        <button id="account-logout" type="button" class="ghost">Sign out</button>
+      </div>
+      <p id="keep-open" class="notice">Keep this tab open while searching.</p>
+
+      <form id="filters" class="card">
+        <h2>Filters</h2>
+        <div class="grid">
+          <label class="span-4">
+            Keywords (one per line)
+            <textarea name="keywords" placeholder="wooden serving tray&#10;wood serving tray with handles&#10;personalized wooden serving tray"></textarea>
+            <span class="field-note">Use several wordings. Each line is a separate search, and different wording brings up different listings.</span>
+          </label>
+          <label>
+            Min price (USD)
+            <input name="minPrice" type="number" min="0" step="0.01" value="20" />
+          </label>
+          <label>
+            Max price (USD)
+            <input name="maxPrice" type="number" min="0" step="0.01" value="40" />
+          </label>
+          <label>
+            Minimum rating
+            <input name="minRating" type="number" min="0" max="5" step="0.1" value="4.5" />
+          </label>
+          <label>
+            Target reviews
+            <input name="targetReviews" type="number" min="0" step="1" value="200" />
+          </label>
+          <label>
+            Min reviews
+            <input name="minReviews" type="number" min="0" step="1" value="100" />
+          </label>
+          <label>
+            Ships from
+            <select name="shipsFrom">
+              <option value="fbm" selected>Not Amazon (seller ships it)</option>
+              <option value="fba">Amazon only (FBA)</option>
+              <option value="any">Any</option>
+            </select>
+          </label>
+          <label>
+            Results wanted per keyword
+            <input name="resultsWanted" type="number" min="1" max="100" step="1" value="10" />
+          </label>
+          <label>
+            Max search pages per keyword
+            <input name="maxPages" type="number" min="1" step="1" value="10" />
+          </label>
+          <label>
+            Deliver to (ZIP / postcode)
+            <input name="zip" type="text" maxlength="12" value="10001" autocomplete="postal-code" />
+          </label>
+          <label class="check span-4">
+            <input name="handmade" type="checkbox" checked />
+            <span>Also search Handmade. Seller-shipped products often appear here and not in the regular results. Each keyword is searched there too.</span>
+          </label>
+          <label class="span-4">
+            Speed
+            <select name="speed">
+              <option value="recommended" selected>Recommended — steadier, fewer Amazon checks</option>
+              <option value="fast">Fast — about twice as fast; Amazon may ask for a human check</option>
+              <option value="gentle">Gentle — slower, least likely to be interrupted</option>
+            </select>
+          </label>
+        </div>
+        <p id="speed-note" class="hint">Recommended is the usual choice: about 1.5–4 seconds between requests, two at a time, and fewer human checks. Fast is about twice as quick, but Amazon is more likely to stop the search and ask you to prove you are human. You can switch back before the next search.</p>
+        <p class="hint">Setting a ZIP updates the Deliver to location on your Amazon account in this browser, and sets the currency to USD.</p>
+        <p id="delivery-status" class="delivery-status">Delivering to: not checked yet</p>
+        <ul id="form-errors" class="errors" hidden></ul>
+        <div class="actions">
+          <button id="start" type="submit">Start</button>
+          <button id="pause" type="button" class="secondary" disabled>Pause</button>
+          <button id="resume" type="button" class="secondary" disabled>Resume</button>
+          <button id="stop" type="button" class="ghost" disabled>Stop</button>
+          <button id="set-delivery" type="button" class="ghost">Set delivery location</button>
+        </div>
+        <div class="presets">
+          <label>
+            Saved presets
+            <select id="preset-select"><option value="">No saved presets</option></select>
+          </label>
+          <button id="load-preset" type="button" class="ghost">Load</button>
+          <button id="delete-preset" type="button" class="ghost">Delete</button>
+          <label>
+            Preset name
+            <input id="preset-name" type="text" maxlength="40" placeholder="Under $40 shelves" />
+          </label>
+          <button id="save-preset" type="button" class="ghost">Save preset</button>
+        </div>
+      </form>
+
+      <section class="card">
+        <p id="progress" aria-live="polite">Ready</p>
+        <div id="captcha-banner" class="banner warn" role="alert" hidden></div>
+        <div id="manual-banner" class="banner warn" role="alert" hidden>
+          <p id="manual-text"></p>
+          <button id="manual-continue" type="button">Continue</button>
+        </div>
+        <div id="error-banner" class="banner bad" role="alert" hidden></div>
+      </section>
+
+      <section class="card">
+        <div class="exports">
+          <button id="download-xlsx" type="button" disabled>Download Excel</button>
+          <button id="download-csv" type="button" class="secondary" disabled>Download CSV</button>
+          <button id="copy-all" type="button" class="ghost" disabled>Copy all links</button>
+        </div>
+        <div id="results"></div>
+        <details id="log-panel">
+          <summary>Log</summary>
+          <ol id="log-list"></ol>
+        </details>
+      </section>
+      </div>
+    </main>
+    <script src="vendor/xlsx.full.min.js"></script>
+    <script src="vendor/jszip.min.js"></script>
+    <script type="module" src="src/finder.js"></script>
+  </body>
+</html>

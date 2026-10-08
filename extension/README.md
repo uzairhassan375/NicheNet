@@ -88,7 +88,7 @@ Amazon changes its HTML. Every selector and URL pattern is in `src/amazonConfig.
 npm run zip
 ```
 
-From this folder, that writes `nichenet.zip`. Upload that zip. The package is the manifest, the finder page, `src/`, `vendor/`, and `icons/`.
+From this folder, that writes `nichenet.zip` in the project root. Upload that zip. The package is the manifest, the finder page, `src/`, `vendor/`, and `icons/`.
 
 The store listing’s single purpose is: “Find products on Amazon that match your price, rating, review and seller filters, and export them to Excel.”
 

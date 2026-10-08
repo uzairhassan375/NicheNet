@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const extensionDir = path.resolve(import.meta.dirname, "..");
-const out = path.join(extensionDir, "nichenet.zip");
+const out = path.join(extensionDir, "..", "nichenet.zip");
 rmSync(out, { force: true });
 execFileSync("zip", [
   "-r",

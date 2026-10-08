@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NicheNet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Find products on Amazon that match your price, rating, review and seller filters, and export them to Excel.",
   "action": {
     "default_title": "Open NicheNet",

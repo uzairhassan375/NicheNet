@@ -215,8 +215,8 @@ test("finder searches seller-shipped products, pauses, and exports a linked work
   assert.doesNotMatch(text, /Amazon ships it/);
   assert.doesNotMatch(text, /Sponsored shelf ad/);
   assert.match(text, /2 found from 4 products checked/);
-  assert.match(text, /Reviews far from target/);
-  assert.match(text, /Price re-checked on product page/);
+  assert.match(text, /Many reviews/);
+  assert.match(text, /Price changed/);
   const firstHref = await page.$eval("tbody tr a", (element) => element.href);
   assert.equal(firstHref, "https://www.amazon.com/dp/B0FBM00001");
 
@@ -242,6 +242,13 @@ test("finder searches seller-shipped products, pauses, and exports a linked work
   const sheet = await zip.file("xl/worksheets/sheet1.xml").async("string");
   assert.match(sheet, /state="frozen"/);
   rmSync(downloadDir, { recursive: true, force: true });
+
+  await page.waitForFunction(() => document.querySelector("#history-count")?.textContent === "1", { timeout: 15000 });
+  await page.click("#open-history");
+  await page.waitForSelector("#history-drawer.open .history-item");
+  const entry = await page.$eval("#history-list", (element) => element.innerText);
+  assert.match(entry, /wooden floating shelves/);
+  assert.match(entry, /2 matches/);
   await page.close();
   } finally {
     await stopSession();

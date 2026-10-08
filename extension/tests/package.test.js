@@ -38,3 +38,11 @@ test("SheetJS and JSZip are files inside the extension", () => {
   assert.ok(xlsx.length > 100000);
   assert.ok(jszip.length > 10000);
 });
+
+test("the Inter font is a file inside the extension", () => {
+  const font = readFileSync(new URL("../vendor/fonts/inter-latin-wght-normal.woff2", import.meta.url));
+  assert.equal(font.subarray(0, 4).toString(), "wOF2");
+  const css = readFileSync(new URL("../src/finder.css", import.meta.url), "utf8");
+  assert.ok(css.includes('url("../vendor/fonts/inter-latin-wght-normal.woff2")'));
+  assert.doesNotMatch(css, /url\(["']?https?:|@import/);
+});

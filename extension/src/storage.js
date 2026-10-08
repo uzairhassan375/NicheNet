@@ -1,9 +1,10 @@
-// storage: filters, named presets, and the last results stay in chrome.storage.local
+// storage: filters, named presets, the last results, and past searches stay in chrome.storage.local
 // on this device. Nothing is sent to a server.
 
 const FILTERS = "filters";
 const PRESETS = "presets";
 const RESULTS = "results";
+const HISTORY = "history";
 
 function rejectRuntime(reject) {
   const message = globalThis.chrome?.runtime?.lastError?.message;
@@ -54,6 +55,13 @@ export function createSettingsStore(area) {
     },
     saveResults(results) {
       return set({ [RESULTS]: results });
+    },
+    async loadHistory() {
+      const items = await get(HISTORY);
+      return Array.isArray(items[HISTORY]) ? items[HISTORY] : [];
+    },
+    saveHistory(history) {
+      return set({ [HISTORY]: history });
     },
   };
 }

@@ -17,7 +17,7 @@ Seller-fulfilled products (the seller ships the item) are the default. Products 
 4. Click **Load unpacked** and choose this folder (the one that contains `manifest.json`). Do not choose the `admin` folder.
 5. Click the toolbar icon. A tab named **NicheNet** opens. Leave that tab open while a search is running.
 
-`npm install` copies SheetJS and JSZip into `vendor/` and writes the icons. Those files are part of the extension. Nothing is loaded from a CDN.
+`npm install` copies SheetJS, JSZip, and the Inter font into `vendor/` and writes the icons. Those files are part of the extension. Nothing is loaded from a CDN.
 
 ## Accounts
 
@@ -25,7 +25,7 @@ The extension asks for a sign-in before a search. An admin creates each person a
 
 - searches per day
 - an optional cap on search pages
-- an optional cap on results per keyword
+- an optional cap on results per product name
 - whether the account is active
 
 Pressing **Start** uses one search. At the daily limit, Start is refused until the admin raises the limit, clicks **Reset today**, turns the account back on, or the next UTC day begins.
@@ -43,8 +43,8 @@ The public Supabase anon key goes in `src/accountConfig.js` (`supabaseAnonKey`) 
 
 ## Use it
 
-1. Enter one keyword per line. Each keyword is searched on its own and becomes its own results group and Excel sheet.
-2. Set the price, minimum rating, and minimum reviews. Results are sorted by how close the review count is to **Target reviews**. There is no maximum review count. **Max search pages per keyword** can be any whole number of 1 or more.
+1. Type a product name and press **Enter** to add the next one (or click **Add product name**). Pasting a list with one product name per line fills one field per product name. Each product name is searched on its own and becomes its own results group and Excel sheet.
+2. Set the price, minimum rating, and minimum reviews. Results are sorted by how close the review count is to **Target reviews**. There is no maximum review count. **Max search pages** can be any whole number of 1 or more.
 3. Leave **Ships from** on **Not Amazon (seller ships it)** when you want seller-fulfilled products.
 4. Enter a US ZIP and click **Set delivery location**, or just click **Start**. Either way the extension:
    - sets the Amazon currency cookie to USD
@@ -57,11 +57,13 @@ The public Supabase anon key goes in `src/accountConfig.js` (`supabaseAnonKey`) 
 
 **Save preset** stores the current filters under a name in local storage.
 
+**History** in the top bar lists the newest 30 searches on this device. **Open** shows a past search again so you can download it as Excel or CSV. **Back to latest** returns to the last search.
+
 ## Permissions
 
 | Permission | Why |
 | --- | --- |
-| `storage` | Saves filters, presets, and the last results on this device. |
+| `storage` | Saves filters, presets, the last results, and search history on this device. |
 | `tabs` | Opens the finder tab, focuses it if it is already open, and opens an Amazon tab when you need to solve a check or set the ZIP by hand. |
 | `cookies` | Sets `i18n-prefs=USD` on `.amazon.com` so prices are in US dollars. Also sets the language cookie to English so rating and seller labels can be read. |
 | `https://www.amazon.com/*` | Reads public search and product pages with your own Amazon session. |

@@ -11,7 +11,7 @@ import {
 
 export function formatProgressLine({ keywordIndex, keywordCount, page, checked, matches, section }) {
   const where = section ? `${section} page ${page}` : `page ${page}`;
-  return `Keyword ${keywordIndex}/${keywordCount}, ${where}, checked ${checked} products, ${matches} matches found`;
+  return `Product name ${keywordIndex}/${keywordCount}, ${where}, checked ${checked} products, ${matches} matches found`;
 }
 
 export function summaryLine(found, checked) {

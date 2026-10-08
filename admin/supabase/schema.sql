@@ -618,3 +618,204 @@ revoke all on function public.record_activity(text, text, text) from public;
 revoke all on function public.admin_list_activity(text, text, uuid) from public;
 grant execute on function public.record_activity(text, text, text) to anon, authenticated;
 grant execute on function public.admin_list_activity(text, text, uuid) to anon, authenticated;
+
+-- Search history: each user's past searches, saved by the extension after a search ends.
+-- The newest 30 searches are kept per user. Only the signed-in user can read their own.
+
+create table if not exists public.search_history (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  started_at timestamptz not null,
+  finished_at timestamptz,
+  keywords text[] not null default '{}',
+  match_count integer not null default 0,
+  filters jsonb not null default '{}'::jsonb,
+  run jsonb not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, started_at)
+);
+
+create index if not exists search_history_user_idx on public.search_history (user_id, started_at desc);
+
+alter table public.search_history enable row level security;
+revoke all on table public.search_history from public, anon, authenticated;
+
+create or replace function public.save_search_history(p_token text, p_run jsonb)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user_id uuid;
+  v_started timestamptz;
+  v_finished timestamptz;
+  v_keywords text[];
+  v_id uuid;
+begin
+  select user_id into v_user_id
+  from public.sessions
+  where token = p_token and is_admin = false and expires_at > now();
+  if v_user_id is null then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  if p_run is null or jsonb_typeof(p_run) <> 'object' or coalesce(jsonb_typeof(p_run->'groups'), '') <> 'array' then
+    return json_build_object('ok', false, 'error', 'Missing search results.');
+  end if;
+  if octet_length(p_run::text) > 2000000 then
+    return json_build_object('ok', false, 'error', 'This search is too large to save in history.');
+  end if;
+  begin
+    v_started := coalesce(nullif(p_run->>'startedAt', '')::timestamptz, now());
+    v_finished := nullif(p_run->>'finishedAt', '')::timestamptz;
+  exception when others then
+    return json_build_object('ok', false, 'error', 'The search has an invalid date.');
+  end;
+  if jsonb_typeof(p_run->'keywords') = 'array' then
+    select coalesce(array_agg(value), '{}') into v_keywords
+    from jsonb_array_elements_text(p_run->'keywords');
+  end if;
+  if coalesce(cardinality(v_keywords), 0) = 0 then
+    select coalesce(array_agg(g->>'keyword'), '{}') into v_keywords
+    from jsonb_array_elements(p_run->'groups') g;
+  end if;
+
+  insert into public.search_history (user_id, started_at, finished_at, keywords, match_count, filters, run)
+  values (
+    v_user_id,
+    v_started,
+    v_finished,
+    v_keywords,
+    (
+      select coalesce(sum(case when jsonb_typeof(g->'matches') = 'array' then jsonb_array_length(g->'matches') else 0 end), 0)
+      from jsonb_array_elements(p_run->'groups') g
+    ),
+    case when jsonb_typeof(p_run->'filters') = 'object' then p_run->'filters' else '{}'::jsonb end,
+    p_run
+  )
+  on conflict (user_id, started_at) do update set
+    finished_at = excluded.finished_at,
+    keywords = excluded.keywords,
+    match_count = excluded.match_count,
+    filters = excluded.filters,
+    run = excluded.run,
+    created_at = now()
+  returning id into v_id;
+
+  delete from public.search_history
+  where user_id = v_user_id
+    and id not in (
+      select id from public.search_history
+      where user_id = v_user_id
+      order by started_at desc
+      limit 30
+    );
+  return json_build_object('ok', true, 'id', v_id);
+end;
+$$;
+
+create or replace function public.list_search_history(p_token text)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user_id uuid;
+  v_items json;
+begin
+  select user_id into v_user_id
+  from public.sessions
+  where token = p_token and is_admin = false and expires_at > now();
+  if v_user_id is null then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  select coalesce(json_agg(row_to_json(t) order by t.started_at desc), '[]'::json)
+  into v_items
+  from (
+    select id, started_at, finished_at, keywords, match_count, filters
+    from public.search_history
+    where user_id = v_user_id
+    order by started_at desc
+    limit 30
+  ) t;
+  return json_build_object('ok', true, 'history', v_items);
+end;
+$$;
+
+create or replace function public.get_search_history(p_token text, p_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user_id uuid;
+  v_run jsonb;
+begin
+  select user_id into v_user_id
+  from public.sessions
+  where token = p_token and is_admin = false and expires_at > now();
+  if v_user_id is null then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  select run into v_run
+  from public.search_history
+  where id = p_id and user_id = v_user_id;
+  if v_run is null then
+    return json_build_object('ok', false, 'code', 'not_found', 'error', 'That search is no longer in history.');
+  end if;
+  return json_build_object('ok', true, 'id', p_id, 'run', v_run);
+end;
+$$;
+
+create or replace function public.delete_search_history(p_token text, p_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user_id uuid;
+begin
+  select user_id into v_user_id
+  from public.sessions
+  where token = p_token and is_admin = false and expires_at > now();
+  if v_user_id is null then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  delete from public.search_history where id = p_id and user_id = v_user_id;
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.clear_search_history(p_token text)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user_id uuid;
+begin
+  select user_id into v_user_id
+  from public.sessions
+  where token = p_token and is_admin = false and expires_at > now();
+  if v_user_id is null then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  delete from public.search_history where user_id = v_user_id;
+  return json_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.save_search_history(text, jsonb) from public;
+revoke all on function public.list_search_history(text) from public;
+revoke all on function public.get_search_history(text, uuid) from public;
+revoke all on function public.delete_search_history(text, uuid) from public;
+revoke all on function public.clear_search_history(text) from public;
+grant execute on function public.save_search_history(text, jsonb) to anon, authenticated;
+grant execute on function public.list_search_history(text) to anon, authenticated;
+grant execute on function public.get_search_history(text, uuid) to anon, authenticated;
+grant execute on function public.delete_search_history(text, uuid) to anon, authenticated;
+grant execute on function public.clear_search_history(text) to anon, authenticated;

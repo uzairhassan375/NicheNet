@@ -134,7 +134,7 @@ function csvCell(value) {
 }
 
 export function buildCsv(run) {
-  const lines = ["NicheNet", filterSummary(run), ["Keyword", ...HEADERS].map(csvCell).join(",")];
+  const lines = ["NicheNet", filterSummary(run), ["Product name", ...HEADERS].map(csvCell).join(",")];
   for (const group of run.groups || []) {
     group.matches.forEach((match, index) => {
       lines.push(

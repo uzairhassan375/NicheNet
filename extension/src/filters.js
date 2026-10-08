@@ -89,7 +89,7 @@ export function validateFilters(input) {
   const filters = normalizeFilters(input);
   const errors = [];
   const keywords = parseKeywords(filters.keywords);
-  if (!keywords.length) errors.push("Enter at least one keyword (one per line).");
+  if (!keywords.length) errors.push("Enter at least one product name.");
   if (!Number.isFinite(filters.minPrice) || filters.minPrice < 0) errors.push("Enter a minimum price of 0 or more.");
   if (!Number.isFinite(filters.maxPrice) || filters.maxPrice < filters.minPrice) {
     errors.push("Maximum price must be at least the minimum price.");

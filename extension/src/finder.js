@@ -2,13 +2,15 @@ import { clampFiltersToAccount, consumeSearch, loginAccount, logoutAccount, reco
 import { createAmazonClient } from "./amazonClient.js";
 import { manualZipMessage, prepareDelivery } from "./delivery.js";
 import { buildCsv, buildWorkbook, csvFilename, downloadBlob, workbookFilename } from "./excel.js";
-import { FILTER_DEFAULTS, normalizeFilters, speedOption, validateFilters } from "./filters.js";
+import { FILTER_DEFAULTS, normalizeFilters, parseKeywords, speedOption, validateFilters } from "./filters.js";
+import { addToHistory, formatRunDate, historyEntry, historyForAccount } from "./history.js";
 import { StoppedError, createJobControl } from "./jobControl.js";
+import { createKeywordList } from "./keywordList.js";
 import { createPacer } from "./pacer.js";
 import { createResultsStore } from "./resultsStore.js";
 import { formatProgressLine, runSearch } from "./scanner.js";
 import { createSettingsStore } from "./storage.js";
-import { allLinks, copyText, countMatches, renderLog, renderResults } from "./ui.js";
+import { allLinks, copyText, countMatches, renderHistory, renderLog, renderResults } from "./ui.js";
 
 const params = new URLSearchParams(location.search);
 const fast = params.get("pace") === "fast";
@@ -23,6 +25,12 @@ const pacer = createPacer({
 });
 
 const form = document.querySelector("#filters");
+const keywordSource = form.elements.namedItem("keywords");
+const keywordList = createKeywordList({
+  list: document.querySelector("#keyword-list"),
+  source: keywordSource,
+  addButton: document.querySelector("#add-keyword"),
+});
 const accountForm = document.querySelector("#account-form");
 const accountEmail = document.querySelector("#account-email");
 const accountPassword = document.querySelector("#account-password");
@@ -50,6 +58,27 @@ const presetName = document.querySelector("#preset-name");
 const downloadXlsx = document.querySelector("#download-xlsx");
 const downloadCsv = document.querySelector("#download-csv");
 const copyAll = document.querySelector("#copy-all");
+const stateLabel = document.querySelector("#state-label");
+const progressBar = document.querySelector("#progress-bar");
+const statKeyword = document.querySelector("#stat-keyword");
+const statChecked = document.querySelector("#stat-checked");
+const statMatches = document.querySelector("#stat-matches");
+const resultsCount = document.querySelector("#results-count");
+const keywordCount = document.querySelector("#keyword-count");
+const accountName = document.querySelector("#account-name");
+const accountAvatar = document.querySelector("#account-avatar");
+const accountMeter = document.querySelector("#account-meter");
+const accountCaps = document.querySelector("#account-caps");
+const toast = document.querySelector("#toast");
+const historyDrawer = document.querySelector("#history-drawer");
+const openHistoryBtn = document.querySelector("#open-history");
+const historyList = document.querySelector("#history-list");
+const historyCount = document.querySelector("#history-count");
+const clearHistoryBtn = document.querySelector("#clear-history");
+const viewingBar = document.querySelector("#viewing-bar");
+const viewingText = document.querySelector("#viewing-text");
+
+const STATE_LABELS = { idle: "Ready", running: "Running", paused: "Paused", captcha: "Needs your check" };
 
 const logs = [];
 let settings;
@@ -58,6 +87,9 @@ let manualResolve = null;
 let manualReject = null;
 let presets = [];
 let currentAccount = null;
+let history = [];
+// A past search opened from History. Null means the latest results are shown.
+let viewing = null;
 
 const client = createAmazonClient({
   pacer,
@@ -84,6 +116,7 @@ function log(level, message) {
 
 function setRunState(state) {
   document.body.dataset.state = state;
+  stateLabel.textContent = STATE_LABELS[state] || STATE_LABELS.idle;
   keepOpen.classList.toggle("active", state !== "idle");
   const controls = new Set(["start", "pause", "resume", "stop"]);
   for (const field of form.querySelectorAll("input, textarea, select, button")) {
@@ -162,7 +195,134 @@ function fillForm(filters) {
     if (field.type === "checkbox") field.checked = value === true || value === "true" || value === "on";
     else field.value = value;
   }
+  keywordList.render();
   updateSpeedNote();
+  updateKeywordCount();
+}
+
+function updateKeywordCount() {
+  const count = parseKeywords(form.elements.namedItem("keywords")?.value).length;
+  keywordCount.textContent = `${count} product name${count === 1 ? "" : "s"}`;
+}
+
+// Display only: the status card numbers and progress bar.
+function showStats({ keyword = "–", checked = 0, matches = 0, percent = 0 }) {
+  statKeyword.textContent = keyword;
+  statChecked.textContent = Number(checked).toLocaleString("en-US");
+  statMatches.textContent = Number(matches).toLocaleString("en-US");
+  progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function showRunStats(run, percent) {
+  const groups = run?.groups || [];
+  const searched = groups.filter((group) => group.status !== "pending").length;
+  showStats({
+    keyword: groups.length ? `${searched}/${groups.length}` : "–",
+    checked: groups.reduce((total, group) => total + (group.checked || 0), 0),
+    matches: countMatches(run),
+    percent: percent ?? (run?.finishedAt ? 100 : 0),
+  });
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove("show"), 1600);
+}
+
+// History opens as a panel from the header button.
+function openHistoryPanel() {
+  refreshHistory();
+  historyDrawer.classList.add("open");
+  openHistoryBtn.setAttribute("aria-expanded", "true");
+  historyDrawer.querySelector(".drawer-head [data-close-history]").focus();
+}
+
+function closeHistoryPanel() {
+  if (!historyDrawer.classList.contains("open")) return;
+  historyDrawer.classList.remove("open");
+  openHistoryBtn.setAttribute("aria-expanded", "false");
+  openHistoryBtn.focus();
+}
+
+function visibleHistory() {
+  return historyForAccount(history, currentAccount);
+}
+
+function refreshHistory() {
+  const entries = visibleHistory();
+  renderHistory(historyList, entries, { viewingId: viewing?.id, latestId: store?.get()?.startedAt });
+  historyCount.hidden = entries.length === 0;
+  historyCount.textContent = String(entries.length);
+  clearHistoryBtn.hidden = entries.length === 0;
+}
+
+async function saveHistory() {
+  try {
+    await settings.saveHistory(history);
+  } catch (error) {
+    // Storage is full: keep the newer half and try once more.
+    history = history.slice(0, Math.max(1, Math.floor(history.length / 2)));
+    try {
+      await settings.saveHistory(history);
+    } catch (again) {
+      log("warn", `Could not save search history (${again.message}).`);
+    }
+  }
+}
+
+async function recordHistory(run) {
+  if (!run?.groups?.length) return;
+  history = addToHistory(history, historyEntry(structuredClone(run), currentAccount));
+  await saveHistory();
+  refreshHistory();
+}
+
+function showLatest() {
+  viewing = null;
+  const run = store.get();
+  renderRun(run);
+  showRunStats(run);
+  progress.textContent = run?.groups?.length ? "Showing your last search." : "";
+  refreshHistory();
+}
+
+function openHistory(id) {
+  const entry = history.find((item) => item.id === id);
+  if (!entry) return;
+  if (control.getState() !== "idle") {
+    showToast("Wait until the search finishes.");
+    return;
+  }
+  if (entry.id === store.get()?.startedAt) {
+    showLatest();
+  } else {
+    viewing = entry;
+    renderRun(entry.run);
+    showRunStats(entry.run);
+    progress.textContent = "Showing a past search.";
+  }
+  closeHistoryPanel();
+}
+
+async function deleteHistory(id) {
+  history = history.filter((item) => item.id !== id);
+  await saveHistory();
+  if (viewing?.id === id) showLatest();
+  refreshHistory();
+}
+
+async function clearHistory() {
+  const visible = new Set(visibleHistory().map((item) => item.id));
+  if (!visible.size) return;
+  const label = `${visible.size} saved search${visible.size === 1 ? "" : "es"}`;
+  if (!confirm(`Delete ${label} from this device? This cannot be undone.`)) return;
+  history = history.filter((item) => !visible.has(item.id));
+  await saveHistory();
+  if (viewing) showLatest();
+  refreshHistory();
+  showToast("History cleared");
 }
 
 function updateSpeedNote() {
@@ -179,8 +339,12 @@ function applySelectedPace() {
   return selected.concurrency;
 }
 
+function shownRun() {
+  return viewing?.run || store?.get();
+}
+
 function updateExportButtons() {
-  const run = store?.get();
+  const run = shownRun();
   const ready = countMatches(run) > 0 || (run?.groups || []).length > 0;
   downloadXlsx.disabled = !run?.groups?.length;
   downloadCsv.disabled = !ready;
@@ -189,6 +353,11 @@ function updateExportButtons() {
 
 function renderRun(run) {
   renderResults(resultsEl, run);
+  viewingBar.hidden = !viewing;
+  viewingText.textContent = viewing ? `Viewing a past search from ${formatRunDate(viewing.run.startedAt || viewing.savedAt)}.` : "";
+  const found = countMatches(run);
+  resultsCount.hidden = found === 0;
+  resultsCount.textContent = String(found);
   updateExportButtons();
 }
 
@@ -296,9 +465,15 @@ function updateAccountStatus(account) {
   if (account.min_reviews != null) caps.push(`reviews ≥ ${account.min_reviews}`);
   if (account.ships_from) caps.push(`ships ${account.ships_from}`);
   if (account.deliver_zip) caps.push(`ZIP ${account.deliver_zip}`);
-  const extra = caps.length ? ` Caps: ${caps.join(", ")}.` : "";
-  const who = account.name || account.email;
-  accountStatus.textContent = `Signed in as ${who}. ${left} of ${limit} searches left today.${extra}`;
+  const who = account.name || account.email || "";
+  accountStatus.textContent = `${left} of ${limit} searches left today`;
+  accountName.textContent = who;
+  accountName.title = account.email || who;
+  accountAvatar.textContent = who.trim().charAt(0).toUpperCase();
+  accountMeter.firstElementChild.style.width = `${limit > 0 ? Math.min(100, Math.round((left / limit) * 100)) : 0}%`;
+  accountMeter.dataset.level = left <= 0 ? "empty" : left <= limit * 0.1 ? "low" : "ok";
+  accountCaps.hidden = caps.length === 0;
+  accountCaps.textContent = caps.length ? `Account limits: ${caps.join(", ")}.` : "";
 }
 
 function showGate() {
@@ -315,6 +490,7 @@ function enterApp(account) {
   applyInputCaps(account);
   fillForm(clampFiltersToAccount(readForm(), account));
   updateAccountStatus(account);
+  refreshHistory();
 }
 
 async function startSearch() {
@@ -362,6 +538,10 @@ async function startSearch() {
     deliveryText: "",
     groups: [],
   };
+  viewing = null;
+  closeHistoryPanel();
+  let progressPercent = 0;
+  showStats({ keyword: `0/${validation.keywords.length}` });
   try {
     await store.set(run);
     renderRun(run);
@@ -379,6 +559,12 @@ async function startSearch() {
       log,
       onProgress: (update) => {
         progress.textContent = formatProgressLine(update);
+        const { maxPages, resultsWanted, handmade } = validation.filters;
+        const step = (update.section ? maxPages : 0) + update.page - 1;
+        const within = Math.min(1, Math.max(update.matches / resultsWanted, step / (maxPages * (handmade ? 2 : 1))));
+        progressPercent = Math.max(progressPercent, ((update.keywordIndex - 1 + within) / update.keywordCount) * 100);
+        showRunStats(run, progressPercent);
+        statKeyword.textContent = `${update.keywordIndex}/${update.keywordCount}`;
       },
       onGroup: (groups) => {
         run.groups = groups;
@@ -387,14 +573,16 @@ async function startSearch() {
       },
     });
     run.finishedAt = new Date().toISOString();
+    showRunStats(run, 100);
     const found = countMatches(run);
-    progress.textContent = `Finished. ${found} match${found === 1 ? "" : "es"} across ${run.groups.length} keyword${run.groups.length === 1 ? "" : "s"}.`;
+    progress.textContent = `Finished. ${found} match${found === 1 ? "" : "es"} across ${run.groups.length} product name${run.groups.length === 1 ? "" : "s"}.`;
     log("info", progress.textContent);
   } catch (error) {
     if (error instanceof StoppedError || error.name === "StoppedError") {
       progress.textContent = "Stopped. Kept the matches found so far.";
       log("info", progress.textContent);
       renderRun(run);
+      showRunStats(run, progressPercent);
     } else {
       progress.textContent = "Search did not finish.";
       showError(error.message);
@@ -410,6 +598,7 @@ async function startSearch() {
     } catch (error) {
       log("warn", `Could not save results (${error.message}).`);
     }
+    await recordHistory(run);
     updateExportButtons();
   }
 }
@@ -492,8 +681,18 @@ function bind() {
   });
   deliveryBtn.addEventListener("click", setDeliveryOnly);
   document.querySelector("#manual-continue").addEventListener("click", () => manualResolve?.());
-  form.addEventListener("input", () => {
+  // A field folded away in "Advanced settings" must be visible when the browser flags it.
+  form.addEventListener(
+    "invalid",
+    (event) => {
+      event.target.closest("details")?.setAttribute("open", "");
+    },
+    true,
+  );
+  form.addEventListener("input", (event) => {
+    if (event.target === keywordSource) keywordList.render();
     updateSpeedNote();
+    updateKeywordCount();
     clearTimeout(bind.timer);
     bind.timer = setTimeout(rememberFilters, 300);
   });
@@ -538,7 +737,7 @@ function bind() {
     log("info", `Deleted preset “${preset.name}”.`);
   });
   downloadXlsx.addEventListener("click", async () => {
-    const run = store.get();
+    const run = shownRun();
     if (!run?.groups?.length) return;
     try {
       const bytes = await buildWorkbook(run);
@@ -552,7 +751,7 @@ function bind() {
     }
   });
   downloadCsv.addEventListener("click", () => {
-    const run = store.get();
+    const run = shownRun();
     if (!run?.groups?.length) return;
     try {
       downloadBlob(csvFilename(), new Blob([buildCsv(run)], { type: "text/csv;charset=utf-8" }));
@@ -562,23 +761,31 @@ function bind() {
     }
   });
   copyAll.addEventListener("click", async () => {
-    const links = allLinks(store.get());
+    const links = allLinks(shownRun());
     if (!links) return;
     await copyText(links);
-    copyAll.textContent = "Copied";
-    setTimeout(() => {
-      copyAll.textContent = "Copy all links";
-    }, 1200);
+    showToast("All links copied");
+  });
+  openHistoryBtn.addEventListener("click", openHistoryPanel);
+  for (const closer of historyDrawer.querySelectorAll("[data-close-history]")) {
+    closer.addEventListener("click", closeHistoryPanel);
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeHistoryPanel();
+  });
+  document.querySelector("#back-to-latest").addEventListener("click", showLatest);
+  clearHistoryBtn.addEventListener("click", clearHistory);
+  historyList.addEventListener("click", (event) => {
+    const open = event.target.closest("[data-open]");
+    if (open) openHistory(open.dataset.open);
+    const remove = event.target.closest("[data-delete]");
+    if (remove) deleteHistory(remove.dataset.delete);
   });
   resultsEl.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-copy]");
     if (!button) return;
     await copyText(button.dataset.copy);
-    const original = button.textContent;
-    button.textContent = "Copied";
-    setTimeout(() => {
-      button.textContent = original;
-    }, 1200);
+    showToast("Link copied");
   });
   window.addEventListener("beforeunload", (event) => {
     if (control.getState() !== "idle") {
@@ -602,10 +809,18 @@ async function init() {
     const saved = await settings.loadFilters();
     fillForm(saved || FILTER_DEFAULTS);
     presets = await settings.loadPresets();
+    history = await settings.loadHistory();
     await refreshPresets();
     const previous = await store.load();
     if (previous?.deliveryText) deliveryStatus.textContent = `Delivering to: ${previous.deliveryText} (last run)`;
     renderRun(previous);
+    showRunStats(previous);
+    // Searches run before History existed: keep the last one so it is not lost.
+    if (previous?.groups?.length && !history.some((item) => item.id === previous.startedAt)) {
+      history = addToHistory(history, historyEntry(previous, null, previous.finishedAt || previous.startedAt));
+      await saveHistory();
+    }
+    if (previous?.groups?.length) progress.textContent = "Showing your last search.";
     const account = await restoreAccount();
     if (account?.active === false) {
       showAccountError("This account is paused. An admin has to allow searches again.");

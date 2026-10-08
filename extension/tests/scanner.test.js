@@ -57,7 +57,7 @@ function htmlFor(url) {
 test("progress line matches the live status sentence", () => {
   assert.equal(
     formatProgressLine({ keywordIndex: 2, keywordCount: 3, page: 4, checked: 87, matches: 6 }),
-    "Keyword 2/3, page 4, checked 87 products, 6 matches found",
+    "Product name 2/3, page 4, checked 87 products, 6 matches found",
   );
 });
 

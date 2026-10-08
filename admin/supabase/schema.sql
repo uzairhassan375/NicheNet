@@ -819,3 +819,348 @@ grant execute on function public.list_search_history(text) to anon, authenticate
 grant execute on function public.get_search_history(text, uuid) to anon, authenticated;
 grant execute on function public.delete_search_history(text, uuid) to anon, authenticated;
 grant execute on function public.clear_search_history(text) to anon, authenticated;
+
+-- Support chat: people send questions from the extension's chat button (signed in or
+-- not), and the admin replies from the Queries page. Messages are kept in Supabase.
+
+create table if not exists public.support_threads (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid unique references public.app_users(id) on delete cascade,
+  guest_key text unique,
+  name text not null default '',
+  email text not null default '',
+  admin_unread integer not null default 0,
+  user_unread integer not null default 0,
+  last_message_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  check (user_id is not null or guest_key is not null)
+);
+
+create table if not exists public.support_messages (
+  id bigint generated always as identity primary key,
+  thread_id uuid not null references public.support_threads(id) on delete cascade,
+  sender text not null check (sender in ('user', 'admin')),
+  body text not null check (length(body) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists support_messages_thread_idx on public.support_messages (thread_id, id);
+create index if not exists support_threads_recent_idx on public.support_threads (last_message_at desc);
+
+alter table public.support_threads enable row level security;
+alter table public.support_messages enable row level security;
+revoke all on table public.support_threads from public, anon, authenticated;
+revoke all on table public.support_messages from public, anon, authenticated;
+
+-- Finds (or starts) the conversation for a signed-in user or for a device that is not
+-- signed in (identified by a long random guest key kept on that device). A conversation
+-- started before signing in moves to the account the first time that person signs in.
+-- Not callable from the browser directly.
+create or replace function public.support_thread_for(
+  p_token text,
+  p_guest_key text,
+  p_name text,
+  p_email text,
+  p_create boolean
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user public.app_users%rowtype;
+  v_thread uuid;
+  v_guest text := nullif(trim(coalesce(p_guest_key, '')), '');
+  v_name text := left(trim(coalesce(p_name, '')), 80);
+  v_email text := left(lower(trim(coalesce(p_email, ''))), 200);
+begin
+  if v_guest is not null and (length(v_guest) < 32 or length(v_guest) > 128) then
+    v_guest := null;
+  end if;
+  if coalesce(p_token, '') <> '' then
+    select u.* into v_user
+    from public.sessions s
+    join public.app_users u on u.id = s.user_id
+    where s.token = p_token and s.is_admin = false and s.expires_at > now();
+  end if;
+
+  if v_user.id is not null then
+    select id into v_thread from public.support_threads where user_id = v_user.id;
+    if v_thread is null and v_guest is not null then
+      update public.support_threads
+      set user_id = v_user.id,
+          guest_key = null,
+          name = coalesce(nullif(v_user.name, ''), v_user.email),
+          email = v_user.email
+      where guest_key = v_guest and user_id is null
+      returning id into v_thread;
+    end if;
+    if v_thread is null and p_create then
+      insert into public.support_threads (user_id, name, email)
+      values (v_user.id, coalesce(nullif(v_user.name, ''), v_user.email), v_user.email)
+      on conflict (user_id) do update set email = excluded.email
+      returning id into v_thread;
+    end if;
+    return v_thread;
+  end if;
+
+  if v_guest is null then
+    return null;
+  end if;
+  select id into v_thread from public.support_threads where guest_key = v_guest;
+  if v_thread is null and p_create then
+    if v_name = '' or position('@' in v_email) < 2 then
+      return null;
+    end if;
+    insert into public.support_threads (guest_key, name, email)
+    values (v_guest, v_name, v_email)
+    on conflict (guest_key) do update set name = excluded.name
+    returning id into v_thread;
+  end if;
+  return v_thread;
+end;
+$$;
+
+create or replace function public.support_send(
+  p_token text,
+  p_guest_key text,
+  p_name text,
+  p_email text,
+  p_body text
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_body text := trim(coalesce(p_body, ''));
+  v_thread uuid;
+  v_recent integer;
+  v_message public.support_messages%rowtype;
+begin
+  if v_body = '' then
+    return json_build_object('ok', false, 'error', 'Write a message first.');
+  end if;
+  if length(v_body) > 2000 then
+    return json_build_object('ok', false, 'error', 'Keep each message under 2,000 characters.');
+  end if;
+  v_thread := public.support_thread_for(p_token, p_guest_key, p_name, p_email, true);
+  if v_thread is null then
+    return json_build_object('ok', false, 'code', 'identify', 'error', 'Add your name and email, or sign in, to send a message.');
+  end if;
+  select count(*) into v_recent
+  from public.support_messages
+  where thread_id = v_thread and sender = 'user' and created_at > now() - interval '1 hour';
+  if v_recent >= 30 then
+    return json_build_object('ok', false, 'code', 'rate', 'error', 'Too many messages in the last hour. Please wait for a reply.');
+  end if;
+  insert into public.support_messages (thread_id, sender, body)
+  values (v_thread, 'user', v_body)
+  returning * into v_message;
+  update public.support_threads
+  set admin_unread = admin_unread + 1, last_message_at = now()
+  where id = v_thread;
+  return json_build_object(
+    'ok', true,
+    'message', json_build_object('id', v_message.id, 'sender', v_message.sender, 'body', v_message.body, 'created_at', v_message.created_at)
+  );
+end;
+$$;
+
+create or replace function public.support_list_messages(p_token text, p_guest_key text, p_after bigint default 0)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_thread uuid;
+  v_items json;
+begin
+  v_thread := public.support_thread_for(p_token, p_guest_key, null, null, false);
+  if v_thread is null then
+    return json_build_object('ok', true, 'messages', '[]'::json);
+  end if;
+  select coalesce(json_agg(json_build_object('id', m.id, 'sender', m.sender, 'body', m.body, 'created_at', m.created_at) order by m.id), '[]'::json)
+  into v_items
+  from (
+    select id, sender, body, created_at
+    from public.support_messages
+    where thread_id = v_thread and id > coalesce(p_after, 0)
+    order by id desc
+    limit 200
+  ) m;
+  update public.support_threads set user_unread = 0 where id = v_thread and user_unread <> 0;
+  return json_build_object('ok', true, 'messages', v_items);
+end;
+$$;
+
+create or replace function public.support_unread(p_token text, p_guest_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_thread uuid;
+  v_unread integer;
+begin
+  v_thread := public.support_thread_for(p_token, p_guest_key, null, null, false);
+  if v_thread is null then
+    return json_build_object('ok', true, 'unread', 0);
+  end if;
+  select user_unread into v_unread from public.support_threads where id = v_thread;
+  return json_build_object('ok', true, 'unread', coalesce(v_unread, 0));
+end;
+$$;
+
+create or replace function public.admin_list_threads(p_token text)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_items json;
+begin
+  if not exists (
+    select 1 from public.sessions
+    where token = p_token and is_admin and expires_at > now()
+  ) then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  select coalesce(json_agg(row_to_json(t) order by t.last_message_at desc), '[]'::json)
+  into v_items
+  from (
+    select
+      th.id,
+      th.user_id,
+      coalesce(nullif(u.name, ''), nullif(th.name, ''), u.email, th.email) as name,
+      coalesce(u.email, th.email) as email,
+      th.user_id is null as is_guest,
+      th.admin_unread,
+      th.last_message_at,
+      th.created_at,
+      last.body as last_body,
+      last.sender as last_sender
+    from public.support_threads th
+    left join public.app_users u on u.id = th.user_id
+    left join lateral (
+      select left(m.body, 140) as body, m.sender
+      from public.support_messages m
+      where m.thread_id = th.id
+      order by m.id desc
+      limit 1
+    ) last on true
+    order by th.last_message_at desc
+    limit 300
+  ) t;
+  return json_build_object('ok', true, 'threads', v_items);
+end;
+$$;
+
+create or replace function public.admin_thread_messages(p_token text, p_thread_id uuid, p_after bigint default 0)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_items json;
+begin
+  if not exists (
+    select 1 from public.sessions
+    where token = p_token and is_admin and expires_at > now()
+  ) then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  if not exists (select 1 from public.support_threads where id = p_thread_id) then
+    return json_build_object('ok', false, 'code', 'not_found', 'error', 'That conversation no longer exists.');
+  end if;
+  select coalesce(json_agg(json_build_object('id', m.id, 'sender', m.sender, 'body', m.body, 'created_at', m.created_at) order by m.id), '[]'::json)
+  into v_items
+  from (
+    select id, sender, body, created_at
+    from public.support_messages
+    where thread_id = p_thread_id and id > coalesce(p_after, 0)
+    order by id desc
+    limit 500
+  ) m;
+  update public.support_threads set admin_unread = 0 where id = p_thread_id and admin_unread <> 0;
+  return json_build_object('ok', true, 'messages', v_items);
+end;
+$$;
+
+create or replace function public.admin_reply(p_token text, p_thread_id uuid, p_body text)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_body text := trim(coalesce(p_body, ''));
+  v_message public.support_messages%rowtype;
+begin
+  if not exists (
+    select 1 from public.sessions
+    where token = p_token and is_admin and expires_at > now()
+  ) then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  if v_body = '' then
+    return json_build_object('ok', false, 'error', 'Write a reply first.');
+  end if;
+  if length(v_body) > 2000 then
+    return json_build_object('ok', false, 'error', 'Keep each reply under 2,000 characters.');
+  end if;
+  if not exists (select 1 from public.support_threads where id = p_thread_id) then
+    return json_build_object('ok', false, 'code', 'not_found', 'error', 'That conversation no longer exists.');
+  end if;
+  insert into public.support_messages (thread_id, sender, body)
+  values (p_thread_id, 'admin', v_body)
+  returning * into v_message;
+  update public.support_threads
+  set user_unread = user_unread + 1, last_message_at = now()
+  where id = p_thread_id;
+  return json_build_object(
+    'ok', true,
+    'message', json_build_object('id', v_message.id, 'sender', v_message.sender, 'body', v_message.body, 'created_at', v_message.created_at)
+  );
+end;
+$$;
+
+create or replace function public.admin_delete_thread(p_token text, p_thread_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not exists (
+    select 1 from public.sessions
+    where token = p_token and is_admin and expires_at > now()
+  ) then
+    return json_build_object('ok', false, 'code', 'unauthorized', 'error', 'Sign in again.');
+  end if;
+  delete from public.support_threads where id = p_thread_id;
+  return json_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.support_thread_for(text, text, text, text, boolean) from public, anon, authenticated;
+revoke all on function public.support_send(text, text, text, text, text) from public;
+revoke all on function public.support_list_messages(text, text, bigint) from public;
+revoke all on function public.support_unread(text, text) from public;
+revoke all on function public.admin_list_threads(text) from public;
+revoke all on function public.admin_thread_messages(text, uuid, bigint) from public;
+revoke all on function public.admin_reply(text, uuid, text) from public;
+revoke all on function public.admin_delete_thread(text, uuid) from public;
+grant execute on function public.support_send(text, text, text, text, text) to anon, authenticated;
+grant execute on function public.support_list_messages(text, text, bigint) to anon, authenticated;
+grant execute on function public.support_unread(text, text) to anon, authenticated;
+grant execute on function public.admin_list_threads(text) to anon, authenticated;
+grant execute on function public.admin_thread_messages(text, uuid, bigint) to anon, authenticated;
+grant execute on function public.admin_reply(text, uuid, text) to anon, authenticated;
+grant execute on function public.admin_delete_thread(text, uuid) to anon, authenticated;

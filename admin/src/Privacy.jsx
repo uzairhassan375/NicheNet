@@ -4,7 +4,7 @@ export default function Privacy() {
   useEffect(() => {
     document.title = "NicheNet privacy policy";
     return () => {
-      document.title = "Admin";
+      document.title = "NicheNet Admin";
     };
   }, []);
 
@@ -23,7 +23,8 @@ export default function Privacy() {
         <li>A sign-in token kept on this device so you stay signed in.</li>
         <li>How many searches you have used today, your daily limit, and whether the account is active.</li>
         <li>Activity from the extension: sign-in, sign-out, each search you start, when a daily limit is reached, and the log lines from that search, such as keywords, the delivery ZIP, pages checked, and how many products matched.</li>
-        <li>Your filters, named presets, and the last results, stored on this device with Chrome’s local storage. Amazon page HTML is not uploaded.</li>
+        <li>Your filters, named presets, the last results, and your search history, stored on this device with Chrome’s local storage. Amazon page HTML is not uploaded.</li>
+        <li>Support chat messages you send with the chat button, and the administrator’s replies. Before you sign in, the chat also asks for your name and email so the administrator can reply.</li>
       </ul>
 
       <h2>Amazon</h2>
@@ -31,7 +32,7 @@ export default function Privacy() {
       <p>If Amazon asks you to confirm you are human, you solve that check yourself. NicheNet does not solve CAPTCHAs and does not use a CAPTCHA-solving service.</p>
 
       <h2>Who can see it</h2>
-      <p>Account data and activity logs are stored in a Supabase project operated for this extension. The administrator who created your account can see your email, daily limit, searches used, and activity log, and can reset the day’s count, change the limit, or delete the account. This information is not sold and is not sent to anyone other than that Supabase project.</p>
+      <p>Account data and activity logs are stored in a Supabase project operated for this extension. The administrator who created your account can see your email, daily limit, searches used, activity log, and chat messages, and can reset the day’s count, change the limit, or delete the account. This information is not sold and is not sent to anyone other than that Supabase project.</p>
 
       <h2>Permissions</h2>
       <ul>
@@ -39,11 +40,11 @@ export default function Privacy() {
         <li><strong>tabs</strong> — opens the NicheNet tab and an Amazon tab when you need to solve a check or set the ZIP yourself.</li>
         <li><strong>cookies</strong> — sets the currency and language cookies on amazon.com.</li>
         <li><strong>https://www.amazon.com/*</strong> — reads public search and product pages.</li>
-        <li><strong>The Supabase host for this extension</strong> — signs you in, counts searches, and stores the activity log.</li>
+        <li><strong>The Supabase host for this extension</strong> — signs you in, counts searches, and stores the activity log and support chat.</li>
       </ul>
 
       <h2>How long it is kept</h2>
-      <p>Local filters and results stay on the device until you clear the extension’s storage or remove the extension. Account records and activity logs stay until an administrator deletes the account. Deleting an account removes that person’s stored activity.</p>
+      <p>Local filters and results stay on the device until you clear the extension’s storage or remove the extension. Account records, activity logs, and chat messages stay until an administrator deletes them or the account. Deleting an account removes that person’s stored activity and chat.</p>
 
       <h2>Contact</h2>
       <p>To ask for your account or activity log to be deleted, contact the administrator who gave you access to NicheNet.</p>

@@ -59,6 +59,8 @@ The public Supabase anon key goes in `src/accountConfig.js` (`supabaseAnonKey`) 
 
 **History** in the top bar lists the newest 30 searches on this device. **Open** shows a past search again so you can download it as Excel or CSV. **Back to latest** returns to the last search.
 
+**Chat** (the round button at the bottom right, also on the sign-in page) sends a message to the admin. Before signing in it asks for a name and email once. Replies from the admin site’s **Queries** page show up in the same chat, with a red badge on the button when one is unread. The chat needs the support chat SQL from `admin/supabase/schema.sql` to be run in Supabase.
+
 ## Permissions
 
 | Permission | Why |

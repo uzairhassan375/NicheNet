@@ -1,4 +1,4 @@
-import { clampFiltersToAccount, consumeSearch, loginAccount, logoutAccount, recordActivity, restoreAccount } from "./account.js";
+import { clampFiltersToAccount, consumeSearch, loginAccount, logoutAccount, recordActivity, restoreAccount, rpc } from "./account.js";
 import { createAmazonClient } from "./amazonClient.js";
 import { manualZipMessage, prepareDelivery } from "./delivery.js";
 import { buildCsv, buildWorkbook, csvFilename, downloadBlob, workbookFilename } from "./excel.js";
@@ -10,6 +10,7 @@ import { createPacer } from "./pacer.js";
 import { createResultsStore } from "./resultsStore.js";
 import { formatProgressLine, runSearch } from "./scanner.js";
 import { createSettingsStore } from "./storage.js";
+import { createSupportChat } from "./support.js";
 import { allLinks, copyText, countMatches, renderHistory, renderLog, renderResults } from "./ui.js";
 
 const params = new URLSearchParams(location.search);
@@ -87,6 +88,7 @@ let manualResolve = null;
 let manualReject = null;
 let presets = [];
 let currentAccount = null;
+let supportChat = null;
 let history = [];
 // A past search opened from History. Null means the latest results are shown.
 let viewing = null;
@@ -480,6 +482,7 @@ function showGate() {
   currentAccount = null;
   accountForm.hidden = false;
   appMain.hidden = true;
+  supportChat?.refresh().catch(() => {});
 }
 
 function enterApp(account) {
@@ -491,6 +494,7 @@ function enterApp(account) {
   fillForm(clampFiltersToAccount(readForm(), account));
   updateAccountStatus(account);
   refreshHistory();
+  supportChat?.refresh().catch(() => {});
 }
 
 async function startSearch() {
@@ -646,6 +650,15 @@ function bind() {
     } catch (error) {
       showAccountError(error.message);
     }
+  });
+  const peek = document.querySelector("#toggle-password");
+  peek?.addEventListener("click", () => {
+    const show = accountPassword.type === "password";
+    accountPassword.type = show ? "text" : "password";
+    peek.setAttribute("aria-pressed", String(show));
+    peek.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    peek.title = show ? "Hide password" : "Show password";
+    peek.querySelector("use").setAttribute("href", show ? "#i-eye-off" : "#i-eye");
   });
   document.querySelector("#account-logout").addEventListener("click", async () => {
     if (control.getState() !== "idle") return;
@@ -804,6 +817,11 @@ async function init() {
   settings = createSettingsStore(chrome.storage.local);
   store = createResultsStore(settings, (error) => log("warn", `Could not save results (${error.message}).`));
   bind();
+  supportChat = createSupportChat({
+    rpc,
+    storage: { get: (key) => chrome.storage.local.get(key), set: (items) => chrome.storage.local.set(items) },
+    getAccount: () => currentAccount,
+  });
   setRunState("idle");
   try {
     const saved = await settings.loadFilters();
@@ -836,6 +854,7 @@ async function init() {
     showGate();
   }
   } finally {
+    supportChat?.start().catch(() => {});
     document.body.dataset.ready = "yes";
   }
 }

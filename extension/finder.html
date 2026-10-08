@@ -23,27 +23,99 @@
       <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></symbol>
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0" /><circle cx="12" cy="12" r="3" /></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" /><path d="m2 2 20 20" /></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></symbol>
+      <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M8 13h2" /><path d="M14 13h2" /><path d="M8 17h2" /><path d="M14 17h2" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /><path d="M12 5v14" /></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M3.7 3.3a.5.5 0 0 1 .7-.6l16.8 8.4a1 1 0 0 1 0 1.8L4.4 21.3a.5.5 0 0 1-.7-.6L6 12Z" /><path d="M6 12h8" /></symbol>
       <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M3 6h18" /><path d="M3 18h12" /></symbol>
     </svg>
 
     <form id="account-form" class="auth">
-      <div class="auth-card">
-        <img class="auth-logo" src="icons/icon48.png" width="48" height="48" alt="" />
-        <h1>Sign in to NicheNet</h1>
-        <p class="auth-lead">Find Amazon products that match your price, rating, review and seller filters, and export them to Excel.</p>
-        <div class="field">
-          <label for="account-email">Email</label>
-          <input id="account-email" type="email" autocomplete="username" placeholder="you@example.com" required />
+      <aside class="auth-brand">
+        <span class="orb orb-a" aria-hidden="true"></span>
+        <span class="orb orb-b" aria-hidden="true"></span>
+        <div class="auth-brand-top">
+          <img src="icons/icon48.png" width="36" height="36" alt="" />
+          <strong>NicheNet</strong>
         </div>
-        <div class="field">
-          <label for="account-password">Password</label>
-          <input id="account-password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+        <div class="auth-pitch">
+          <span class="eyebrow"><span class="live-dot" aria-hidden="true"></span>Amazon product research</span>
+          <h2>Find products <span class="hl">worth selling</span>, in minutes.</h2>
+          <p>Search Amazon with your own price, rating, review and seller filters, then export every match to Excel.</p>
+          <ul class="auth-chips">
+            <li><svg class="i"><use href="#i-sliders" /></svg>Precise filters</li>
+            <li><svg class="i"><use href="#i-search" /></svg>Seller-shipped finds</li>
+            <li><svg class="i"><use href="#i-download" /></svg>Excel &amp; CSV</li>
+            <li><svg class="i"><use href="#i-clock" /></svg>Search history</li>
+          </ul>
         </div>
-        <p id="account-error" class="form-alert" hidden></p>
-        <button id="account-login" type="submit" class="lg block">Sign in</button>
-        <p class="auth-note">An admin creates your account and sets how many searches you can run each day.</p>
+        <div class="auth-collage" aria-hidden="true">
+          <div class="collage-card main">
+            <p class="preview-head">Results · wooden serving tray</p>
+            <div class="preview-row">
+              <span class="preview-title">Personalized Walnut Serving Board, Engraved Gift</span>
+              <span class="preview-meta"><b>$32.50</b><span class="star">★ 4.8</span><span>188 reviews</span><em>Seller ships it</em></span>
+            </div>
+            <div class="preview-row">
+              <span class="preview-title">Handmade Mango Wood Tray, Decorative Platter</span>
+              <span class="preview-meta"><b>$27.00</b><span class="star">★ 4.6</span><span>340 reviews</span><em>Seller ships it</em></span>
+            </div>
+          </div>
+          <div class="collage-card stat">
+            <span class="stat-label">Matches found</span>
+            <strong>24</strong>
+            <span class="spark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <div class="collage-card file">
+            <span class="file-icon"><svg class="i"><use href="#i-sheet" /></svg></span>
+            <span class="file-text"><strong>NicheNet_results.xlsx</strong><small>24 products · ready to download</small></span>
+          </div>
+        </div>
+        <p class="auth-brand-foot">Searches run in your own browser, with your own Amazon session.</p>
+      </aside>
+
+      <div class="auth-main">
+        <div class="auth-card">
+          <img class="auth-logo" src="icons/icon48.png" width="48" height="48" alt="" />
+          <div>
+            <h1>Welcome back</h1>
+            <p class="auth-lead">Sign in with the email and password your admin gave you.</p>
+          </div>
+          <div class="field">
+            <label for="account-email">Email</label>
+            <div class="input-icon">
+              <svg class="i"><use href="#i-mail" /></svg>
+              <input id="account-email" type="email" autocomplete="username" placeholder="you@example.com" required />
+            </div>
+          </div>
+          <div class="field">
+            <label for="account-password">Password</label>
+            <div class="input-icon">
+              <svg class="i"><use href="#i-lock" /></svg>
+              <input id="account-password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+              <button id="toggle-password" type="button" class="ghost icon sm peek" aria-label="Show password" aria-pressed="false" title="Show password">
+                <svg class="i"><use href="#i-eye" /></svg>
+              </button>
+            </div>
+          </div>
+          <p id="account-error" class="form-alert" hidden></p>
+          <button id="account-login" type="submit" class="lg block signin-btn">
+            <span>Sign in</span>
+            <svg class="i"><use href="#i-arrow-right" /></svg>
+          </button>
+          <p class="auth-secure"><svg class="i"><use href="#i-shield" /></svg>Secure sign-in over an encrypted connection.</p>
+          <div class="auth-help">
+            <p>No account yet? An admin creates it and sets how many searches you can run each day.</p>
+            <p>Trouble signing in? Use the <strong>chat button</strong> at the bottom right.</p>
+          </div>
+        </div>
       </div>
     </form>
 
@@ -345,6 +417,39 @@
         </aside>
       </div>
     </div>
+
+    <!-- Support chat: on the sign-in page and in the app. -->
+    <button id="chat-fab" class="chat-fab" type="button" aria-label="Chat with support" aria-expanded="false" aria-controls="chat-panel" title="Chat with support">
+      <svg class="i chat-open-icon"><use href="#i-chat" /></svg>
+      <svg class="i chat-close-icon"><use href="#i-close" /></svg>
+      <span id="chat-badge" class="chat-badge" hidden>0</span>
+    </button>
+    <section id="chat-panel" class="chat-panel" role="dialog" aria-labelledby="chat-title" hidden>
+      <header class="chat-head">
+        <span class="chat-logo"><img src="icons/icon48.png" width="36" height="36" alt="" /><span class="online" aria-hidden="true"></span></span>
+        <div>
+          <strong id="chat-title">NicheNet Support</strong>
+          <span id="chat-sub">We usually reply within a day.</span>
+        </div>
+        <button id="chat-close" type="button" class="ghost icon sm" aria-label="Close chat" title="Close">
+          <svg class="i"><use href="#i-close" /></svg>
+        </button>
+      </header>
+      <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+      <form id="chat-intro" class="chat-intro" hidden>
+        <p>Tell us who you are so we can reply to you.</p>
+        <input id="chat-name" type="text" maxlength="80" autocomplete="name" placeholder="Your name" aria-label="Your name" required />
+        <input id="chat-email" type="email" maxlength="200" autocomplete="email" placeholder="Your email" aria-label="Your email" required />
+        <button type="submit" class="block">Start chat</button>
+      </form>
+      <form id="chat-form" class="chat-compose">
+        <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Type your message…" aria-label="Message"></textarea>
+        <button id="chat-send" type="submit" class="icon" aria-label="Send" title="Send">
+          <svg class="i"><use href="#i-send" /></svg>
+        </button>
+      </form>
+      <p id="chat-error" class="chat-error" role="alert" hidden></p>
+    </section>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

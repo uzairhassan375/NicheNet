@@ -8,6 +8,7 @@ NicheNet searches Amazon from your own browser. Accounts and daily search limits
 - Sign-in sends your email and password to Supabase so the extension can check them. Supabase stores the password only as a hash. A signed-in session token is kept on this device.
 - Each time you press Start, the extension tells Supabase to count one search and to read your limits: searches per day, optional page and result caps, and whether the account is active. If the limit is reached, the search does not start.
 - An admin can create accounts, change those limits, reset the day’s count, or pause an account. The admin signs in on a separate website with an admin password.
+- If you use the chat button, your messages are stored in Supabase so the admin can read and answer them. Before signing in, the chat asks for your name and email, and a random key on this device keeps your conversation. The admin can delete a conversation at any time.
 - The extension does not sell this information and does not send it to anyone other than that Supabase project.
 - If Amazon shows a CAPTCHA or a “continue shopping” check, you solve it yourself in an Amazon tab. The extension does not try to solve it and does not use a CAPTCHA-solving service.
 

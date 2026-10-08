@@ -273,6 +273,36 @@ export default function App() {
     await loadUsers();
   }
 
+  async function setUserPassword(user, nextPassword) {
+    setError("");
+    setNotice("");
+    const result = await rpc("admin_save_user", {
+      p_token: token,
+      p_id: user.id,
+      p_email: user.email,
+      p_password: nextPassword,
+      p_name: user.name || "",
+      p_active: user.active,
+      p_searches_per_day: Number(user.searches_per_day),
+      p_max_pages: user.max_pages,
+      p_max_results: user.max_results,
+      p_price_min: user.price_min,
+      p_price_max: user.price_max,
+      p_min_rating: user.min_rating,
+      p_min_reviews: user.min_reviews,
+      p_target_reviews: user.target_reviews,
+      p_ships_from: user.ships_from,
+      p_deliver_zip: user.deliver_zip,
+    });
+    if (!result.ok) {
+      setError(result.error || "Could not set that password.");
+      return false;
+    }
+    setNotice(`Password updated for ${user.email}. They need to sign in again.`);
+    await loadUsers();
+    return true;
+  }
+
   async function toggleActive(user) {
     setError("");
     setNotice("");
@@ -519,6 +549,7 @@ export default function App() {
             users={users}
             onCreate={() => goTo("create")}
             onSaveQuota={saveQuota}
+            onSetPassword={setUserPassword}
             onLogs={openLogs}
             onToggle={toggleActive}
             onReset={resetToday}
@@ -602,7 +633,7 @@ function CreateUser({ draft, setDraft, onSubmit }) {
   );
 }
 
-function UserList({ users, onCreate, onSaveQuota, onLogs, onToggle, onReset, onDelete }) {
+function UserList({ users, onCreate, onSaveQuota, onSetPassword, onLogs, onToggle, onReset, onDelete }) {
   const active = users.filter((user) => user.active).length;
   const limited = users.filter((user) => user.active && quota(user).used >= quota(user).limit).length;
   const searches = users.reduce((total, user) => total + (Number(user.used_today) || 0), 0);
@@ -635,6 +666,7 @@ function UserList({ users, onCreate, onSaveQuota, onLogs, onToggle, onReset, onD
                   <th>Status</th>
                   <th>Used today</th>
                   <th>Daily limit</th>
+                  <th>Password</th>
                   <th className="right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -644,6 +676,7 @@ function UserList({ users, onCreate, onSaveQuota, onLogs, onToggle, onReset, onD
                     key={user.id}
                     user={user}
                     onSaveQuota={onSaveQuota}
+                    onSetPassword={onSetPassword}
                     onLogs={onLogs}
                     onToggle={onToggle}
                     onReset={onReset}
@@ -659,8 +692,9 @@ function UserList({ users, onCreate, onSaveQuota, onLogs, onToggle, onReset, onD
   );
 }
 
-function UserRow({ user, onSaveQuota, onLogs, onToggle, onReset, onDelete }) {
+function UserRow({ user, onSaveQuota, onSetPassword, onLogs, onToggle, onReset, onDelete }) {
   const [searches, setSearches] = useState(String(user.searches_per_day));
+  const [nextPassword, setNextPassword] = useState("");
   useEffect(() => {
     setSearches(String(user.searches_per_day));
   }, [user.searches_per_day, user.id]);
@@ -719,6 +753,30 @@ function UserRow({ user, onSaveQuota, onLogs, onToggle, onReset, onDelete }) {
             onChange={(event) => setSearches(event.target.value)}
           />
           <button type="submit" className="btn primary sm" disabled={!changed}>Save</button>
+        </form>
+      </td>
+      <td data-label="Password">
+        <form
+          className="limit-form password-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const value = nextPassword.trim();
+            if (value.length < 8) return;
+            const saved = await onSetPassword(user, value);
+            if (saved) setNextPassword("");
+          }}
+        >
+          <input
+            type="text"
+            minLength={8}
+            required
+            autoComplete="off"
+            placeholder="At least 8 characters"
+            aria-label={`New password for ${user.email}`}
+            value={nextPassword}
+            onChange={(event) => setNextPassword(event.target.value)}
+          />
+          <button type="submit" className="btn primary sm" disabled={nextPassword.trim().length < 8}>Set</button>
         </form>
       </td>
       <td data-label="Actions" className="right">

@@ -462,6 +462,11 @@ begin
       end,
       updated_at = now()
     where id = v_id;
+    if p_password is not null and length(p_password) > 0 then
+      delete from public.sessions where user_id = v_id and not is_admin;
+      insert into public.activity_log (user_id, action, detail)
+      values (v_id, 'Password changed', 'An admin set a new password.');
+    end if;
   end if;
   return json_build_object('ok', true, 'id', v_id);
 exception

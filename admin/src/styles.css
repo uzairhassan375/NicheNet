@@ -607,6 +607,7 @@ tbody tr:hover td { background: #fafcfb; }
 
 .limit-form { display: flex; align-items: center; gap: 6px; }
 .limit-form input { width: 96px; height: 32px; padding: 0 10px; }
+.password-form input { width: 168px; }
 
 .row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; }
 
